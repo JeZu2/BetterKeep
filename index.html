@@ -65,16 +65,20 @@
     #done-section li {
       cursor: default;
     }
-    /* Style for inline input */
-    li input[type="text"] {
+    /* Style input & add button when adding new root task */
+    #checkbox-tree li input[type="text"] {
       font-size: 14px;
+      margin-right: 6px;
       padding: 2px 4px;
+      width: 200px;
     }
   </style>
 </head>
 <body>
 
   <h2>Task List</h2>
+  <button id="add-root-task-btn" class="btn" style="margin-bottom:10px;">Add Task</button>
+
   <p>
     • Check a task to mark it as done (it moves to the “Done” section below and gets a strikethrough).<br>
     • Uncheck a task in “Done” to move it back to its original parent/task.<br>
@@ -84,7 +88,6 @@
   </p>
 
   <ul id="checkbox-tree">
-    <!-- ... your existing tree structure here ... -->
     <li>
       <label><input type="checkbox" /> Fruits</label>
       <button class="btn add-btn">+</button>
@@ -115,10 +118,97 @@
             </li>
           </ul>
         </li>
-        <!-- More tree items ... -->
+        <li>
+          <label><input type="checkbox" /> Berries</label>
+          <button class="btn add-btn">+</button>
+          <button class="btn remove-btn">−</button>
+          <ul>
+            <li>
+              <label><input type="checkbox" /> Strawberry</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+            <li>
+              <label><input type="checkbox" /> Blueberry</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+            <li>
+              <label><input type="checkbox" /> Raspberry</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+          </ul>
+        </li>
+        <li>
+          <label><input type="checkbox" /> Tropical</label>
+          <button class="btn add-btn">+</button>
+          <button class="btn remove-btn">−</button>
+          <ul>
+            <li>
+              <label><input type="checkbox" /> Mango</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+            <li>
+              <label><input type="checkbox" /> Pineapple</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+          </ul>
+        </li>
       </ul>
     </li>
-    <!-- Add the rest of your initial tree here -->
+    <li>
+      <label><input type="checkbox" /> Vegetables</label>
+      <button class="btn add-btn">+</button>
+      <button class="btn remove-btn">−</button>
+      <ul>
+        <li>
+          <label><input type="checkbox" /> Leafy Greens</label>
+          <button class="btn add-btn">+</button>
+          <button class="btn remove-btn">−</button>
+          <ul>
+            <li>
+              <label><input type="checkbox" /> Spinach</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+            <li>
+              <label><input type="checkbox" /> Lettuce</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+          </ul>
+        </li>
+        <li>
+          <label><input type="checkbox" /> Root Vegetables</label>
+          <button class="btn add-btn">+</button>
+          <button class="btn remove-btn">−</button>
+          <ul>
+            <li>
+              <label><input type="checkbox" /> Carrot</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+            <li>
+              <label><input type="checkbox" /> Potato</label>
+              <button class="btn add-btn">+</button>
+              <button class="btn remove-btn">−</button>
+              <ul></ul>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </li>
   </ul>
 
   <h3>Done</h3>
@@ -130,21 +220,27 @@
     document.addEventListener('DOMContentLoaded', () => {
       const treeRoot = document.getElementById('checkbox-tree');
       const doneSection = document.getElementById('done-section');
+      const addRootBtn = document.getElementById('add-root-task-btn');
       let draggedItem = null;
 
+      // A counter to assign unique IDs to each <li>
       let idCounter = 0;
+      // Map: li.id → { parentUl: <ul>, nextSibling: <li> (or null) }
       const originalLocations = {};
 
+      // Assign a unique ID to a <li> and increment counter
       function assignId(li) {
         if (!li.id) {
           li.id = `task-${idCounter++}`;
         }
       }
 
+      // On startup, traverse all existing <li> and assign IDs
       treeRoot.querySelectorAll('li').forEach(li => {
         assignId(li);
       });
 
+      // Propagate checkbox state downward
       function updateChildren(chk, isChecked) {
         const li = chk.closest('li');
         if (!li) return;
@@ -154,6 +250,7 @@
         });
       }
 
+      // Propagate checkbox state upward (indeterminate logic)
       function updateParents(chk) {
         const parentLi = chk.closest('ul')?.closest('li');
         if (!parentLi) return;
@@ -178,26 +275,33 @@
         updateParents(parentChk);
       }
 
+      // Move a task <li> to done section (with strike-through), saving original location
       function moveToDone(li) {
+        // Record its original parent <ul> and next sibling
         const parentUl = li.parentElement;
         const nextSibling = li.nextElementSibling;
         originalLocations[li.id] = { parentUl, nextSibling };
 
+        // Ensure descendants stay checked
         li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
         li.classList.add('in-done');
         doneSection.appendChild(li);
       }
 
+      // Move a task <li> back to its saved original location
       function moveToOriginalParent(li) {
         const info = originalLocations[li.id];
         if (!info) {
+          // Fallback: append to root if no record
           treeRoot.appendChild(li);
           return;
         }
         const { parentUl, nextSibling } = info;
         li.classList.remove('in-done');
+        // Uncheck its checkboxes
         li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
 
+        // If nextSibling still exists in parentUl, insert before it; otherwise append
         if (nextSibling && parentUl.contains(nextSibling)) {
           parentUl.insertBefore(li, nextSibling);
         } else {
@@ -205,10 +309,13 @@
         }
       }
 
+      // (Re)initialize checkboxes, drag/drop, add/remove listeners
       function reinitializeTree() {
+        // 1) Assign IDs to any new <li> that lacks one
         treeRoot.querySelectorAll('li').forEach(li => assignId(li));
         doneSection.querySelectorAll('li').forEach(li => assignId(li));
 
+        // 2) Ensure every <li> in treeRoot is draggable; none in doneSection are
         treeRoot.querySelectorAll('li').forEach(li => {
           li.draggable = true;
         });
@@ -216,165 +323,11 @@
           li.draggable = false;
         });
 
-        // Replace checkboxes to clear old listeners
+        // 3) Clear and reattach checkbox listeners (including moved items)
         document.querySelectorAll('input[type="checkbox"]').forEach(chk => {
           chk.replaceWith(chk.cloneNode(true));
         });
         document.querySelectorAll('input[type="checkbox"]').forEach(chk => {
           chk.addEventListener('change', () => {
             const li = chk.closest('li');
-            if (chk.checked) {
-              if (li.closest('#checkbox-tree')) {
-                moveToDone(li);
-              }
-            } else {
-              if (li.closest('#done-section')) {
-                moveToOriginalParent(li);
-              }
-            }
-            reinitializeTree();
-          });
-        });
-
-        // Replace add/remove buttons to clear old listeners
-        treeRoot.querySelectorAll('.add-btn').forEach(btn => {
-          btn.replaceWith(btn.cloneNode(true));
-        });
-        treeRoot.querySelectorAll('.remove-btn').forEach(btn => {
-          btn.replaceWith(btn.cloneNode(true));
-        });
-
-        // New add button handler — inline input instead of prompt
-        treeRoot.querySelectorAll('.add-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const parentLi = btn.closest('li');
-
-            // Check if there is already an input box to prevent multiple
-            if (parentLi.querySelector('ul input[type="text"]')) return;
-
-            const inputLi = document.createElement('li');
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.placeholder = 'Enter task name...';
-            input.style.fontSize = '14px';
-            input.style.marginRight = '6px';
-
-            const saveBtn = document.createElement('button');
-            saveBtn.textContent = 'Add';
-            saveBtn.className = 'btn';
-
-            inputLi.appendChild(input);
-            inputLi.appendChild(saveBtn);
-
-            let childUl = parentLi.querySelector('ul');
-            if (!childUl) {
-              childUl = document.createElement('ul');
-              parentLi.appendChild(childUl);
-            }
-            childUl.appendChild(inputLi);
-
-            saveBtn.addEventListener('click', () => {
-              const taskName = input.value.trim();
-              if (!taskName) return;
-
-              const newLi = document.createElement('li');
-              assignId(newLi);
-              newLi.innerHTML = `
-                <label><input type="checkbox" /> ${taskName}</label>
-                <button class="btn add-btn">+</button>
-                <button class="btn remove-btn">−</button>
-                <ul></ul>
-              `;
-              childUl.replaceChild(newLi, inputLi);
-              reinitializeTree();
-            });
-          });
-        });
-
-        treeRoot.querySelectorAll('.remove-btn').forEach(btn => {
-          btn.addEventListener('click', e => {
-            e.stopPropagation();
-            const li = btn.closest('li');
-            const confirmDelete = confirm('Delete this task and all subtasks?');
-            if (!confirmDelete) return;
-            const parentUl = li.parentElement;
-            li.remove();
-            if (parentUl && parentUl.tagName === 'UL' && parentUl.children.length === 0) {
-              parentUl.remove();
-            }
-            reinitializeTree();
-          });
-        });
-      }
-
-      reinitializeTree();
-
-      // Drag & Drop
-      treeRoot.addEventListener('dragstart', e => {
-        const li = e.target.closest('li');
-        if (!li) return;
-        draggedItem = li;
-        li.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-      });
-
-      treeRoot.addEventListener('dragend', e => {
-        if (draggedItem) {
-          draggedItem.classList.remove('dragging');
-          draggedItem = null;
-        }
-        treeRoot.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-      });
-
-      treeRoot.addEventListener('dragover', e => {
-        e.preventDefault();
-        const liOver = e.target.closest('li');
-        if (!liOver || liOver === draggedItem) return;
-        liOver.classList.add('drag-over');
-      });
-
-      treeRoot.addEventListener('dragleave', e => {
-        const liOver = e.target.closest('li');
-        if (liOver) {
-          liOver.classList.remove('drag-over');
-        }
-      });
-
-      treeRoot.addEventListener('drop', e => {
-        e.preventDefault();
-        const liOver = e.target.closest('li');
-        if (!liOver || !draggedItem || liOver === draggedItem) return;
-
-        liOver.classList.remove('drag-over');
-
-        const droppedOnLabel = !!e.target.closest('li > label');
-        const rect = liOver.getBoundingClientRect();
-        const offsetY = e.clientY - rect.top;
-
-        if (droppedOnLabel) {
-          let childUl = liOver.querySelector('ul');
-          if (!childUl) {
-            childUl = document.createElement('ul');
-            liOver.appendChild(childUl);
-          }
-          childUl.appendChild(draggedItem);
-        } else {
-          if (offsetY < rect.height / 2) {
-            liOver.parentNode.insertBefore(draggedItem, liOver);
-          } else {
-            if (liOver.nextSibling) {
-              liOver.parentNode.insertBefore(draggedItem, liOver.nextSibling);
-            } else {
-              liOver.parentNode.appendChild(draggedItem);
-            }
-          }
-        }
-
-        reinitializeTree();
-      });
-    });
-  </script>
-
-</body>
-</html>
+            if
