@@ -2,8 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Draggable Task Tree</title>
+  <title>Task List with Drag to Top-Level</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -27,22 +26,8 @@
       opacity: 0.4;
     }
 
-    li.drop-above::before,
-    li.drop-below::after {
-      content: "";
-      display: block;
-      height: 4px;
-      margin: 2px 0;
-      background-color: #0066cc;
-      border-radius: 2px;
-    }
-
-    li.drop-above::before {
-      margin-bottom: 4px;
-    }
-
-    li.drop-below::after {
-      margin-top: 4px;
+    li.drag-over {
+      outline: 2px dashed #0066cc;
     }
 
     li > label {
@@ -90,19 +75,46 @@
       padding: 4px 10px;
       font-size: 14px;
     }
+
+    #drop-zone {
+      margin-top: 10px;
+      padding: 10px;
+      border: 2px dashed transparent;
+      text-align: center;
+      font-style: italic;
+      color: #888;
+      transition: 0.2s ease;
+    }
+
+    #drop-zone.active {
+      border-color: #0066cc;
+      background-color: #f0f8ff;
+      color: #0066cc;
+    }
   </style>
 </head>
 <body>
-  <button id="add-top-btn">Add Top-Level Task</button>
+
+  <h2>Task List</h2>
+  <p>
+    • Drag a task to re-order or change its level<br>
+    • Drop in the blank area to promote a subtask to top-level<br>
+    • Click “+” to add subtasks or a top-level item
+  </p>
+
+  <button id="add-top-btn" class="btn">+ Add Top-Level Item</button>
+
   <ul id="checkbox-tree">
-    <li><label><input type="checkbox"> Task A</label> <button class="btn add-btn">+</button> <button class="btn remove-btn">−</button><ul><li><label><input type="checkbox"> Subtask A1</label> <button class="btn add-btn">+</button> <button class="btn remove-btn">−</button></li></ul></li>
-    <li><label><input type="checkbox"> Task B</label> <button class="btn add-btn">+</button> <button class="btn remove-btn">−</button></li>
+    <!-- Your initial tasks go here (same as before, or copy from previous code) -->
   </ul>
+
+  <div id="drop-zone">Drop here to make top-level</div>
+
   <h3>Done</h3>
   <ul id="done-section"></ul>
 
   <script>
-   document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', () => {
       const treeRoot = document.getElementById('checkbox-tree');
       const doneSection = document.getElementById('done-section');
       const dropZone = document.getElementById('drop-zone');
@@ -342,5 +354,6 @@
       });
     });
   </script>
+
 </body>
 </html>
