@@ -2,37 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Task List with “Done” and Return Capability</title>
+  <title>Task List with Drag to Top-Level</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
     }
+
     ul {
       list-style: none;
       padding-left: 1em;
       margin: 0;
     }
+
     li {
       margin: 4px 0;
       position: relative;
       padding: 2px;
       border-radius: 4px;
     }
+
     li.dragging {
       opacity: 0.4;
     }
+
     li.drag-over {
       outline: 2px dashed #0066cc;
     }
+
     li > label {
       display: inline-flex;
       align-items: center;
       cursor: pointer;
     }
+
     li > label input[type="checkbox"] {
       margin-right: 6px;
     }
+
     .btn {
       margin-left: 6px;
       padding: 0 6px;
@@ -43,24 +50,46 @@
       border-radius: 3px;
       cursor: pointer;
     }
+
     .btn:hover {
       background: #e0e0e0;
     }
+
     #done-section li label {
       text-decoration: line-through;
       color: #555;
       cursor: default;
     }
+
     #done-section li .add-btn,
     #done-section li .remove-btn {
       display: none;
     }
+
     #done-section li {
       cursor: default;
     }
-    #add-top-level-btn {
+
+    #add-top-btn {
       margin-bottom: 10px;
-      font-weight: bold;
+      padding: 4px 10px;
+      font-size: 14px;
+    }
+
+    #drop-zone {
+      margin-top: 10px;
+      padding: 10px;
+      border: 2px dashed transparent;
+      text-align: center;
+      font-style: italic;
+      color: #888;
+      transition: 0.2s ease;
+    }
+
+    #drop-zone.active {
+      border-color: #0066cc;
+      background-color: #f0f8ff;
+      color: #0066cc;
     }
   </style>
 </head>
@@ -68,20 +97,18 @@
 
   <h2>Task List</h2>
   <p>
-    • Check a task to mark it as done (it moves to the “Done” section below and gets a strikethrough).<br>
-    • Uncheck a task in “Done” to move it back to its original parent/task.<br>
-    • Drag any open task to reorder or re-parent.<br>
-    • Click “+” to add a new subtask.<br>
-    • Click “−” to remove a task (and its subtree).
+    • Drag a task to re-order or change its level<br>
+    • Drop in the blank area to promote a subtask to top-level<br>
+    • Click “+” to add subtasks or a top-level item
   </p>
 
-  <!-- ✅ Top-Level Add Button -->
-  <button id="add-top-level-btn" class="btn">Add Top-Level Item</button>
+  <button id="add-top-btn" class="btn">+ Add Top-Level Item</button>
 
   <ul id="checkbox-tree">
-    <!-- existing list items -->
-    <!-- (content skipped for brevity; it's exactly your provided structure) -->
+    <!-- Your initial tasks go here (same as before, or copy from previous code) -->
   </ul>
+
+  <div id="drop-zone">Drop here to make top-level</div>
 
   <h3>Done</h3>
   <ul id="done-section"></ul>
@@ -90,20 +117,15 @@
     document.addEventListener('DOMContentLoaded', () => {
       const treeRoot = document.getElementById('checkbox-tree');
       const doneSection = document.getElementById('done-section');
+      const dropZone = document.getElementById('drop-zone');
+      const addTopBtn = document.getElementById('add-top-btn');
       let draggedItem = null;
-
       let idCounter = 0;
       const originalLocations = {};
 
       function assignId(li) {
-        if (!li.id) {
-          li.id = `task-${idCounter++}`;
-        }
+        if (!li.id) li.id = `task-${idCounter++}`;
       }
-
-      treeRoot.querySelectorAll('li').forEach(li => {
-        assignId(li);
-      });
 
       function updateChildren(chk, isChecked) {
         const li = chk.closest('li');
@@ -149,10 +171,7 @@
 
       function moveToOriginalParent(li) {
         const info = originalLocations[li.id];
-        if (!info) {
-          treeRoot.appendChild(li);
-          return;
-        }
+        if (!info) return treeRoot.appendChild(li);
         const { parentUl, nextSibling } = info;
         li.classList.remove('in-done');
         li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -164,15 +183,9 @@
       }
 
       function reinitializeTree() {
-        treeRoot.querySelectorAll('li').forEach(li => assignId(li));
-        doneSection.querySelectorAll('li').forEach(li => assignId(li));
-
-        treeRoot.querySelectorAll('li').forEach(li => {
-          li.draggable = true;
-        });
-        doneSection.querySelectorAll('li').forEach(li => {
-          li.draggable = false;
-        });
+        document.querySelectorAll('li').forEach(li => assignId(li));
+        treeRoot.querySelectorAll('li').forEach(li => li.draggable = true);
+        doneSection.querySelectorAll('li').forEach(li => li.draggable = false);
 
         document.querySelectorAll('input[type="checkbox"]').forEach(chk => {
           chk.replaceWith(chk.cloneNode(true));
@@ -181,13 +194,9 @@
           chk.addEventListener('change', () => {
             const li = chk.closest('li');
             if (chk.checked) {
-              if (li.closest('#checkbox-tree')) {
-                moveToDone(li);
-              }
+              if (li.closest('#checkbox-tree')) moveToDone(li);
             } else {
-              if (li.closest('#done-section')) {
-                moveToOriginalParent(li);
-              }
+              if (li.closest('#done-section')) moveToOriginalParent(li);
             }
             reinitializeTree();
           });
@@ -241,24 +250,6 @@
         });
       }
 
-      // ✅ Add Top-Level Item button logic
-      document.getElementById('add-top-level-btn').addEventListener('click', () => {
-        const taskName = prompt('Enter name for top-level task:', 'New Task');
-        if (!taskName) return;
-
-        const newLi = document.createElement('li');
-        assignId(newLi);
-        newLi.innerHTML = `
-          <label><input type="checkbox" /> ${taskName}</label>
-          <button class="btn add-btn">+</button>
-          <button class="btn remove-btn">−</button>
-          <ul></ul>
-        `;
-        treeRoot.appendChild(newLi);
-        reinitializeTree();
-      });
-
-      // Initial setup
       reinitializeTree();
 
       treeRoot.addEventListener('dragstart', e => {
@@ -275,52 +266,90 @@
           draggedItem = null;
         }
         treeRoot.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+        dropZone.classList.remove('active');
       });
 
       treeRoot.addEventListener('dragover', e => {
         e.preventDefault();
         const liOver = e.target.closest('li');
-        if (!liOver || liOver === draggedItem) return;
-        liOver.classList.add('drag-over');
+        if (liOver && liOver !== draggedItem) {
+          liOver.classList.add('drag-over');
+        }
+        if (!liOver) {
+          dropZone.classList.add('active');
+        }
       });
 
       treeRoot.addEventListener('dragleave', e => {
         const liOver = e.target.closest('li');
-        if (liOver) {
-          liOver.classList.remove('drag-over');
-        }
+        if (liOver) liOver.classList.remove('drag-over');
+        dropZone.classList.remove('active');
       });
 
       treeRoot.addEventListener('drop', e => {
         e.preventDefault();
         const liOver = e.target.closest('li');
-        if (!liOver || !draggedItem || liOver === draggedItem) return;
+        dropZone.classList.remove('active');
+        if (!draggedItem) return;
 
-        liOver.classList.remove('drag-over');
-
-        const droppedOnLabel = !!e.target.closest('li > label');
-        const rect = liOver.getBoundingClientRect();
-        const offsetY = e.clientY - rect.top;
-
-        if (droppedOnLabel) {
-          let childUl = liOver.querySelector('ul');
-          if (!childUl) {
-            childUl = document.createElement('ul');
-            liOver.appendChild(childUl);
-          }
-          childUl.appendChild(draggedItem);
+        if (!liOver || liOver === draggedItem) {
+          treeRoot.appendChild(draggedItem);
         } else {
-          if (offsetY < rect.height / 2) {
-            liOver.parentNode.insertBefore(draggedItem, liOver);
+          liOver.classList.remove('drag-over');
+
+          const droppedOnLabel = !!e.target.closest('li > label');
+          const rect = liOver.getBoundingClientRect();
+          const offsetY = e.clientY - rect.top;
+
+          if (droppedOnLabel) {
+            let childUl = liOver.querySelector('ul');
+            if (!childUl) {
+              childUl = document.createElement('ul');
+              liOver.appendChild(childUl);
+            }
+            childUl.appendChild(draggedItem);
           } else {
-            if (liOver.nextSibling) {
-              liOver.parentNode.insertBefore(draggedItem, liOver.nextSibling);
+            if (offsetY < rect.height / 2) {
+              liOver.parentNode.insertBefore(draggedItem, liOver);
             } else {
-              liOver.parentNode.appendChild(draggedItem);
+              liOver.parentNode.insertBefore(draggedItem, liOver.nextSibling);
             }
           }
         }
 
+        reinitializeTree();
+      });
+
+      dropZone.addEventListener('dragover', e => {
+        e.preventDefault();
+        dropZone.classList.add('active');
+      });
+
+      dropZone.addEventListener('dragleave', e => {
+        dropZone.classList.remove('active');
+      });
+
+      dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        if (draggedItem) {
+          treeRoot.appendChild(draggedItem);
+          dropZone.classList.remove('active');
+          reinitializeTree();
+        }
+      });
+
+      addTopBtn.addEventListener('click', () => {
+        const taskName = prompt('Enter new task name:', 'New Task');
+        if (!taskName) return;
+        const newLi = document.createElement('li');
+        assignId(newLi);
+        newLi.innerHTML = `
+          <label><input type="checkbox" /> ${taskName}</label>
+          <button class="btn add-btn">+</button>
+          <button class="btn remove-btn">−</button>
+          <ul></ul>
+        `;
+        treeRoot.appendChild(newLi);
         reinitializeTree();
       });
     });
