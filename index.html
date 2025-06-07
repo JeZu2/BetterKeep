@@ -2,95 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Task List with Drag to Top-Level</title>
+  <title>Task List with Persistence</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-
-    ul {
-      list-style: none;
-      padding-left: 1em;
-      margin: 0;
-    }
-
-    li {
-      margin: 4px 0;
-      position: relative;
-      padding: 2px;
-      border-radius: 4px;
-    }
-
-    li.dragging {
-      opacity: 0.4;
-    }
-
-    li.drag-over {
-      outline: 2px dashed #0066cc;
-    }
-
-    li > label {
-      display: inline-flex;
-      align-items: center;
-      cursor: pointer;
-    }
-
-    li > label input[type="checkbox"] {
-      margin-right: 6px;
-    }
-
-    .btn {
-      margin-left: 6px;
-      padding: 0 6px;
-      font-size: 12px;
-      line-height: 1;
-      border: 1px solid #888;
-      background: #f0f0f0;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-
-    .btn:hover {
-      background: #e0e0e0;
-    }
-
-    #done-section li label {
-      text-decoration: line-through;
-      color: #555;
-      cursor: default;
-    }
-
-    #done-section li .add-btn,
-    #done-section li .remove-btn {
-      display: none;
-    }
-
-    #done-section li {
-      cursor: default;
-    }
-
-    #add-top-btn {
-      margin-bottom: 10px;
-      padding: 4px 10px;
-      font-size: 14px;
-    }
-
-    #drop-zone {
-      margin-top: 10px;
-      padding: 10px;
-      border: 2px dashed transparent;
-      text-align: center;
-      font-style: italic;
-      color: #888;
-      transition: 0.2s ease;
-    }
-
-    #drop-zone.active {
-      border-color: #0066cc;
-      background-color: #f0f8ff;
-      color: #0066cc;
-    }
+    /* Your existing styles unchanged */
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    ul { list-style: none; padding-left: 1em; margin: 0; }
+    li { margin: 4px 0; position: relative; padding: 2px; border-radius: 4px; }
+    li.dragging { opacity: 0.4; }
+    li.drag-over { outline: 2px dashed #0066cc; }
+    li > label { display: inline-flex; align-items: center; cursor: pointer; }
+    li > label input[type="checkbox"] { margin-right: 6px; }
+    .btn { margin-left: 6px; padding: 0 6px; font-size: 12px; line-height: 1; border: 1px solid #888; background: #f0f0f0; border-radius: 3px; cursor: pointer; }
+    .btn:hover { background: #e0e0e0; }
+    #done-section li label { text-decoration: line-through; color: #555; cursor: default; }
+    #done-section li .add-btn, #done-section li .remove-btn { display: none; }
+    #done-section li { cursor: default; }
+    #add-top-btn { margin-bottom: 10px; padding: 4px 10px; font-size: 14px; }
+    #drop-zone { margin-top: 10px; padding: 10px; border: 2px dashed transparent; text-align: center; font-style: italic; color: #888; transition: 0.2s ease; }
+    #drop-zone.active { border-color: #0066cc; background-color: #f0f8ff; color: #0066cc; }
   </style>
 </head>
 <body>
@@ -103,13 +32,8 @@
   </p>
 
   <button id="add-top-btn" class="btn">+ Add Top-Level Item</button>
-
-  <ul id="checkbox-tree">
-    <!-- Your initial tasks go here (same as before, or copy from previous code) -->
-  </ul>
-
+  <ul id="checkbox-tree"></ul>
   <div id="drop-zone">Drop here to make top-level</div>
-
   <h3>Done</h3>
   <ul id="done-section"></ul>
 
@@ -127,59 +51,43 @@
         if (!li.id) li.id = `task-${idCounter++}`;
       }
 
-      function updateChildren(chk, isChecked) {
-        const li = chk.closest('li');
-        if (!li) return;
-        li.querySelectorAll('ul input[type="checkbox"]').forEach(c => {
-          c.checked = isChecked;
-          c.indeterminate = false;
+      function serializeList(ul) {
+        return Array.from(ul.children).map(li => {
+          const checkbox = li.querySelector('> label > input[type="checkbox"]');
+          const text = li.querySelector('> label').textContent.trim();
+          const childrenUl = li.querySelector('ul');
+          return {
+            text,
+            checked: checkbox.checked,
+            children: childrenUl ? serializeList(childrenUl) : []
+          };
         });
       }
 
-      function updateParents(chk) {
-        const parentLi = chk.closest('ul')?.closest('li');
-        if (!parentLi) return;
-        const parentChk = parentLi.querySelector('> label input[type="checkbox"]');
-        const directChildren = Array.from(
-          parentLi.querySelectorAll('ul > li > label input[type="checkbox"]')
-        );
-
-        let allChecked = directChildren.every(c => c.checked && !c.indeterminate);
-        let noneChecked = directChildren.every(c => !c.checked && !c.indeterminate);
-
-        if (allChecked) {
-          parentChk.checked = true;
-          parentChk.indeterminate = false;
-        } else if (noneChecked) {
-          parentChk.checked = false;
-          parentChk.indeterminate = false;
-        } else {
-          parentChk.checked = false;
-          parentChk.indeterminate = true;
-        }
-        updateParents(parentChk);
-      }
-
-      function moveToDone(li) {
-        const parentUl = li.parentElement;
-        const nextSibling = li.nextElementSibling;
-        originalLocations[li.id] = { parentUl, nextSibling };
-        li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-        li.classList.add('in-done');
-        doneSection.appendChild(li);
-      }
-
-      function moveToOriginalParent(li) {
-        const info = originalLocations[li.id];
-        if (!info) return treeRoot.appendChild(li);
-        const { parentUl, nextSibling } = info;
-        li.classList.remove('in-done');
-        li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-        if (nextSibling && parentUl.contains(nextSibling)) {
-          parentUl.insertBefore(li, nextSibling);
-        } else {
+      function deserializeList(data, parentUl, done = false) {
+        parentUl.innerHTML = '';
+        data.forEach(item => {
+          const li = document.createElement('li');
+          li.innerHTML = `
+            <label><input type="checkbox" ${item.checked ? 'checked' : ''}/> ${item.text}</label>
+            <button class="btn add-btn">+</button>
+            <button class="btn remove-btn">−</button>
+            <ul></ul>
+          `;
+          if (done) {
+            li.querySelector('.add-btn')?.remove();
+            li.querySelector('.remove-btn')?.remove();
+          }
           parentUl.appendChild(li);
-        }
+          if (item.children && item.children.length > 0) {
+            deserializeList(item.children, li.querySelector('ul'), done);
+          }
+        });
+      }
+
+      function saveTree() {
+        localStorage.setItem('taskTree', JSON.stringify(serializeList(treeRoot)));
+        localStorage.setItem('doneTree', JSON.stringify(serializeList(doneSection)));
       }
 
       function reinitializeTree() {
@@ -190,6 +98,7 @@
         document.querySelectorAll('input[type="checkbox"]').forEach(chk => {
           chk.replaceWith(chk.cloneNode(true));
         });
+
         document.querySelectorAll('input[type="checkbox"]').forEach(chk => {
           chk.addEventListener('change', () => {
             const li = chk.closest('li');
@@ -199,6 +108,7 @@
               if (li.closest('#done-section')) moveToOriginalParent(li);
             }
             reinitializeTree();
+            saveTree();
           });
         });
 
@@ -231,6 +141,7 @@
             }
             childUl.appendChild(newLi);
             reinitializeTree();
+            saveTree();
           });
         });
 
@@ -246,12 +157,44 @@
               parentUl.remove();
             }
             reinitializeTree();
+            saveTree();
           });
         });
+
+        saveTree();
       }
+
+      function moveToDone(li) {
+        const parentUl = li.parentElement;
+        const nextSibling = li.nextElementSibling;
+        originalLocations[li.id] = { parentUl, nextSibling };
+        li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+        li.classList.add('in-done');
+        doneSection.appendChild(li);
+      }
+
+      function moveToOriginalParent(li) {
+        const info = originalLocations[li.id];
+        if (!info) return treeRoot.appendChild(li);
+        const { parentUl, nextSibling } = info;
+        li.classList.remove('in-done');
+        li.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        if (nextSibling && parentUl.contains(nextSibling)) {
+          parentUl.insertBefore(li, nextSibling);
+        } else {
+          parentUl.appendChild(li);
+        }
+      }
+
+      // Load saved trees
+      const savedTree = localStorage.getItem('taskTree');
+      const savedDone = localStorage.getItem('doneTree');
+      if (savedTree) deserializeList(JSON.parse(savedTree), treeRoot, false);
+      if (savedDone) deserializeList(JSON.parse(savedDone), doneSection, true);
 
       reinitializeTree();
 
+      // Drag & drop logic (same as before)
       treeRoot.addEventListener('dragstart', e => {
         const li = e.target.closest('li');
         if (!li) return;
@@ -260,11 +203,9 @@
         e.dataTransfer.effectAllowed = 'move';
       });
 
-      treeRoot.addEventListener('dragend', e => {
-        if (draggedItem) {
-          draggedItem.classList.remove('dragging');
-          draggedItem = null;
-        }
+      treeRoot.addEventListener('dragend', () => {
+        if (draggedItem) draggedItem.classList.remove('dragging');
+        draggedItem = null;
         treeRoot.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
         dropZone.classList.remove('active');
       });
@@ -272,12 +213,8 @@
       treeRoot.addEventListener('dragover', e => {
         e.preventDefault();
         const liOver = e.target.closest('li');
-        if (liOver && liOver !== draggedItem) {
-          liOver.classList.add('drag-over');
-        }
-        if (!liOver) {
-          dropZone.classList.add('active');
-        }
+        if (liOver && liOver !== draggedItem) liOver.classList.add('drag-over');
+        if (!liOver) dropZone.classList.add('active');
       });
 
       treeRoot.addEventListener('dragleave', e => {
@@ -296,7 +233,6 @@
           treeRoot.appendChild(draggedItem);
         } else {
           liOver.classList.remove('drag-over');
-
           const droppedOnLabel = !!e.target.closest('li > label');
           const rect = liOver.getBoundingClientRect();
           const offsetY = e.clientY - rect.top;
@@ -318,6 +254,7 @@
         }
 
         reinitializeTree();
+        saveTree();
       });
 
       dropZone.addEventListener('dragover', e => {
@@ -325,7 +262,7 @@
         dropZone.classList.add('active');
       });
 
-      dropZone.addEventListener('dragleave', e => {
+      dropZone.addEventListener('dragleave', () => {
         dropZone.classList.remove('active');
       });
 
@@ -335,6 +272,7 @@
           treeRoot.appendChild(draggedItem);
           dropZone.classList.remove('active');
           reinitializeTree();
+          saveTree();
         }
       });
 
@@ -351,9 +289,9 @@
         `;
         treeRoot.appendChild(newLi);
         reinitializeTree();
+        saveTree();
       });
     });
   </script>
-
 </body>
 </html>
