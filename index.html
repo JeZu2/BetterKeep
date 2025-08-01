@@ -2,160 +2,307 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BetterKeep</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Better Task List</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    ul { list-style: none; padding-left: 1em; margin: 0; transition: outline 0.2s ease; }
-    #checkbox-tree.root-drag-over { outline: 2px dashed #0066cc; }
-    li { margin: 8px 0; padding: 8px; border-radius: 4px; }
-    li.dragging { opacity: 0.4; }
-    li.drag-over { outline: 2px dashed #0066cc; }
-    li > label { display: inline-flex; align-items: center; cursor: pointer; font-size: 18px; padding: 4px; }
-    li > label input[type="checkbox"] { transform: scale(1.8); margin-right: 12px; }
-    .btn { margin-left: 8px; padding: 6px 12px; font-size: 16px; border: 1px solid #888; background: #f0f0f0; border-radius: 3px; cursor: pointer; }
-    .btn:hover { background: #e0e0e0; }
-    #done-section li label { text-decoration: line-through; color: #555; cursor: default; }
-    #done-section li .add-btn, #done-section li .remove-btn { display: none; }
-    #done-section li { cursor: default; }
-    @media (max-width: 600px) {
-      li > label { font-size: 30px; padding: 10px; }
-      li > label input[type="checkbox"] { transform: scale(3); margin-right: 30px; }
-      .btn { padding: 10px 16px; font-size: 24px; }
-      h2, h3 { font-size: 1.5em; }
+    html, body {
+      overscroll-behavior: contain;
+      touch-action: none;
+    }
+    body {
+      font-family: sans-serif;
+      padding: 1em;
+      margin: 0;
+    }
+    ul {
+      list-style: none;
+      padding-left: 1em;
+    }
+    .task {
+      padding: 0.5em;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      margin-bottom: 5px;
+      background: #f9f9f9;
+      cursor: grab;
+      user-select: none;
+      touch-action: manipulation;
+      transition: border 0.2s, transform 0.1s;
+    }
+    .task.dragging {
+      opacity: 0.6;
+      transform: scale(1.03);
+      z-index: 999;
+      position: absolute;
+      pointer-events: none;
+    }
+    .task.drop-highlight {
+      border: 2px solid blue !important;
+    }
+    .done {
+      margin-top: 2em;
+      background: #e6ffe6;
+      padding: 1em;
+    }
+    button {
+      margin: 2px;
     }
   </style>
 </head>
 <body>
+  <h1>Better Task List</h1>
+  <button onclick="addTask(null)">Add Root Task</button>
+  <ul id="taskList" ondragover="event.preventDefault()" ondrop="dropToRoot(event)"></ul>
 
-  <h2>Task List</h2>
-  <button id="add-root-btn" class="btn" style="margin-bottom:16px;">+ Add Task</button>
-  <ul id="checkbox-tree"></ul>
-
-  <h3>Done</h3>
-  <ul id="done-section"></ul>
+  <h2>Done</h2>
+  <ul id="doneList" class="done"></ul>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      let tree = document.getElementById('checkbox-tree');
-      const done = document.getElementById('done-section');
-      const addRootBtn = document.getElementById('add-root-btn');
-      let idCount = 0;
+    let data = JSON.parse(localStorage.getItem('taskData')) || {
+      tasks: [], done: []
+    };
+    let dragged = null;
+    let draggedFrom = null;
+    let draggingElement = null;
+    let originalElement = null;
 
-      function giveId(li) {
-        if (!li.id) li.id = 't-' + (idCount++);
-      }
+    function saveData() {
+      localStorage.setItem('taskData', JSON.stringify(data));
+    }
 
-      function serializeList(ul, doneStatus = false) {
-        return Array.from(ul.children).map(li => {
-          const checkbox = li.querySelector('label input[type=checkbox]');
-          const label = li.querySelector('label');
-          const text = label.textContent.trim();
-          const children = li.querySelector('ul') ? serializeList(li.querySelector('ul'), doneStatus) : [];
-          return {
-            text,
-            checked: checkbox.checked,
-            done: doneStatus,
-            children
-          };
-        });
-      }
+    function render() {
+      document.getElementById('taskList').innerHTML = '';
+      document.getElementById('doneList').innerHTML = '';
+      data.tasks.forEach(t => renderTask(t, document.getElementById('taskList'), data.tasks));
+      data.done.forEach(t => renderTask(t, document.getElementById('doneList'), data.done));
+    }
 
-      function saveData() {
-        const tasks = [
-          ...serializeList(tree, false),
-          ...serializeList(done, true)
-        ];
-        localStorage.setItem('taskData', JSON.stringify(tasks));
-      }
+    function renderTask(task, container, parentList) {
+      const li = document.createElement('li');
+      li.className = 'task';
+      li.setAttribute('draggable', 'true');
+      li.taskRef = task;
 
-      function buildList(items, parentUl) {
-        for (const item of items) {
-          const li = document.createElement('li');
-          giveId(li);
-          li.innerHTML = `
-            <label><input type="checkbox" ${item.checked ? 'checked' : ''} /> ${item.text}</label>
-            <button class="btn add-btn">+</button>
-            <button class="btn remove-btn">−</button>
-            <ul></ul>`;
-          buildList(item.children, li.querySelector('ul'));
-          parentUl.appendChild(li);
-        }
-      }
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = task.done;
+      checkbox.onchange = () => toggleDone(task);
 
-      function loadData() {
-        const data = JSON.parse(localStorage.getItem('taskData') || '[]');
-        tree.innerHTML = '';
-        done.innerHTML = '';
-        const activeTasks = data.filter(task => !task.done);
-        const doneTasks = data.filter(task => task.done);
-        buildList(activeTasks, tree);
-        buildList(doneTasks, done);
-      }
+      const span = document.createElement('span');
+      span.textContent = ' ' + task.text;
 
-      function rebindEvents() {
-        document.querySelectorAll('input[type=checkbox]').forEach(chk => {
-          chk.addEventListener('change', () => {
-            const li = chk.closest('li');
-            if (chk.checked && tree.contains(li)) {
-              done.appendChild(li);
-              chk.checked = true;
-            } else if (!chk.checked && done.contains(li)) {
-              tree.appendChild(li);
-              chk.checked = false;
-            }
-            rebindEvents();
-            saveData();
-          });
-        });
+      const addBtn = document.createElement('button');
+      addBtn.textContent = '+';
+      addBtn.onclick = () => addTask(task);
 
-        document.querySelectorAll('.add-btn').forEach(btn => {
-          btn.onclick = () => {
-            const taskName = prompt('Subtask name:');
-            if (!taskName) return;
-            const parentLi = btn.closest('li');
-            const subUl = parentLi.querySelector('ul');
-            const li = document.createElement('li');
-            giveId(li);
-            li.innerHTML = `
-              <label><input type="checkbox" /> ${taskName}</label>
-              <button class="btn add-btn">+</button>
-              <button class="btn remove-btn">−</button>
-              <ul></ul>`;
-            subUl.appendChild(li);
-            rebindEvents();
-            saveData();
-          };
-        });
-
-        document.querySelectorAll('.remove-btn').forEach(btn => {
-          btn.onclick = () => {
-            if (!confirm('Delete this task and its subtasks?')) return;
-            const li = btn.closest('li');
-            li.remove();
-            saveData();
-          };
-        });
-      }
-
-      addRootBtn.onclick = () => {
-        const taskName = prompt('New task name:');
-        if (!taskName) return;
-        const li = document.createElement('li');
-        giveId(li);
-        li.innerHTML = `
-          <label><input type="checkbox" /> ${taskName}</label>
-          <button class="btn add-btn">+</button>
-          <button class="btn remove-btn">−</button>
-          <ul></ul>`;
-        tree.appendChild(li);
-        rebindEvents();
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'x';
+      delBtn.onclick = () => {
+        removeTaskFromList(task, data.tasks);
+        removeTaskFromList(task, data.done);
         saveData();
+        render();
       };
 
-      loadData();
-      rebindEvents();
-    });
+      li.append(checkbox, span, addBtn, delBtn);
+
+      const subUl = document.createElement('ul');
+      task.children = task.children || [];
+      task.children.forEach(child => renderTask(child, subUl, task.children));
+      li.appendChild(subUl);
+
+      // desktop drag
+      li.addEventListener('dragstart', e => {
+        dragged = task;
+        draggedFrom = parentList;
+        draggingElement = li;
+        li.classList.add('dragging');
+        e.stopPropagation();
+      });
+      li.addEventListener('dragend', () => {
+        draggingElement?.classList.remove('dragging');
+      });
+      li.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        li.classList.add('drop-highlight');
+      });
+      li.addEventListener('dragleave', e => {
+        e.stopPropagation();
+        li.classList.remove('drop-highlight');
+      });
+      li.addEventListener('drop', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        li.classList.remove('drop-highlight');
+        if (dragged && dragged !== task && !isDescendant(dragged, task)) {
+          removeTaskFromList(dragged, data.tasks);
+          task.children.push(dragged);
+          saveData();
+          render();
+        }
+      });
+
+      // mobile drag
+      li.addEventListener('touchstart', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+
+        dragged = task;
+        draggedFrom = parentList;
+        originalElement = li;
+
+        // Clone only the task bar (not children)
+        const clone = document.createElement('div');
+        clone.className = 'task dragging';
+        clone.style.position = 'absolute';
+        clone.style.pointerEvents = 'none';
+        clone.style.left = `${e.touches[0].clientX}px`;
+        clone.style.top = `${e.touches[0].clientY}px`;
+        clone.style.width = `${li.offsetWidth}px`;
+        clone.innerHTML = li.childNodes[0].outerHTML + li.childNodes[1].outerHTML + li.childNodes[2].outerHTML + li.childNodes[3].outerHTML;
+
+        document.body.appendChild(clone);
+        draggingElement = clone;
+
+        li.style.visibility = 'hidden';
+
+        let currentDropTarget = null;
+
+        const moveHandler = ev => {
+          ev.preventDefault();
+          const touch = ev.touches[0];
+          clone.style.left = `${touch.clientX}px`;
+          clone.style.top = `${touch.clientY}px`;
+
+          const el = document.elementFromPoint(touch.clientX, touch.clientY);
+          const overLi = el && el.closest('li.task');
+
+          if (currentDropTarget && currentDropTarget !== overLi) {
+            currentDropTarget.classList.remove('drop-highlight');
+            currentDropTarget = null;
+          }
+          if (overLi && overLi !== originalElement && overLi !== currentDropTarget) {
+            overLi.classList.add('drop-highlight');
+            currentDropTarget = overLi;
+          }
+        };
+
+        const endHandler = ev => {
+          ev.preventDefault();
+          document.removeEventListener('touchmove', moveHandler);
+          document.removeEventListener('touchend', endHandler);
+
+          document.querySelectorAll('.drop-highlight').forEach(el => el.classList.remove('drop-highlight'));
+
+          originalElement.style.visibility = '';
+          clone.remove();
+          draggingElement = null;
+
+          const touch = ev.changedTouches[0];
+          const dropEl = document.elementFromPoint(touch.clientX, touch.clientY);
+          const closestLi = dropEl && dropEl.closest('li.task');
+
+          // Remove the task from its original location
+          removeTaskFromList(dragged, data.tasks);
+
+          if (
+            closestLi &&
+            closestLi.taskRef &&
+            closestLi.taskRef !== dragged &&
+            !isDescendant(dragged, closestLi.taskRef)
+          ) {
+            // If dropped on another task: keep children
+            closestLi.taskRef.children = closestLi.taskRef.children || [];
+            closestLi.taskRef.children.push(dragged);
+          } else {
+            // If dropped on root: strip children
+            const taskClone = { ...dragged, children: [] };
+            data.tasks.push(taskClone);
+          }
+
+          saveData();
+          render();
+        };
+
+        document.addEventListener('touchmove', moveHandler, { passive: false });
+        document.addEventListener('touchend', endHandler, { passive: false });
+      });
+
+      container.appendChild(li);
+    }
+
+    function dropToRoot(e) {
+      e.preventDefault();
+      if (dragged) {
+        removeTaskFromList(dragged, data.tasks);
+        data.tasks.push(dragged);
+        saveData();
+        render();
+      }
+    }
+
+    function removeTaskFromList(task, list) {
+      const idx = list.indexOf(task);
+      if (idx !== -1) { list.splice(idx, 1); return true; }
+      for (const t of list) {
+        if (removeTaskFromList(task, t.children || [])) return true;
+      }
+      return false;
+    }
+
+    function addTask(parent) {
+      const text = prompt('Enter task');
+      if (!text) return;
+      const newTask = { text, done: false, children: [], originPath: [] };
+      if (parent) parent.children.push(newTask);
+      else data.tasks.push(newTask);
+      saveData();
+      render();
+    }
+
+    function toggleDone(task) {
+      task.done = !task.done;
+      if (task.done) {
+        task.originPath = findPath(task, data.tasks);
+        removeTaskFromList(task, data.tasks);
+        data.done.push(task);
+      } else {
+        removeTaskFromList(task, data.done);
+        try {
+          insertTaskAtPath(data.tasks, task.originPath, task);
+        } catch {
+          data.tasks.push(task);
+        }
+      }
+      saveData();
+      render();
+    }
+
+    function findPath(task, list, path = []) {
+      for (let i = 0; i < list.length; i++) {
+        if (list[i] === task) return [...path, i];
+        const sub = findPath(task, list[i].children || [], [...path, i, 'children']);
+        if (sub) return sub;
+      }
+      return null;
+    }
+
+    function insertTaskAtPath(list, path, task) {
+      let ptr = list;
+      for (let i = 0; i < path.length - 1; i++) {
+        if (path[i] === 'children') continue;
+        ptr = ptr[path[i]].children ||= [];
+      }
+      ptr.push(task);
+    }
+
+    function isDescendant(parent, child) {
+      if (!parent.children) return false;
+      if (parent.children.includes(child)) return true;
+      return parent.children.some(c => isDescendant(c, child));
+    }
+
+    render();
   </script>
 </body>
 </html>
