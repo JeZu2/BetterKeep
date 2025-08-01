@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Task List with Root‐Level Drop Target</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BetterKeep</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -14,11 +15,9 @@
       margin: 0;
       transition: outline 0.2s ease;
     }
-    /* Root‐level drop highlight */
     #checkbox-tree.root-drag-over {
       outline: 2px dashed #0066cc;
     }
-    /* Give list items more “air” */
     li {
       margin: 8px 0;
       padding: 8px;
@@ -30,7 +29,6 @@
     li.drag-over {
       outline: 2px dashed #0066cc;
     }
-    /* Larger, touch‐friendly labels & checkboxes */
     li > label {
       display: inline-flex;
       align-items: center;
@@ -54,7 +52,6 @@
     .btn:hover {
       background: #e0e0e0;
     }
-    /* Done section styling */
     #done-section li label {
       text-decoration: line-through;
       color: #555;
@@ -66,6 +63,27 @@
     }
     #done-section li {
       cursor: default;
+    }
+
+    @media (max-width: 600px) {
+      li > label {
+        font-size: 30px;
+        padding: 10px;
+      }
+
+      li > label input[type="checkbox"] {
+        transform: scale(3);
+        margin-right: 30px;
+      }
+
+      .btn {
+        padding: 10px 16px;
+        font-size: 24px;
+      }
+
+      h2, h3 {
+        font-size: 1.5em;
+      }
     }
   </style>
 </head>
@@ -107,7 +125,6 @@
         if (!li.id) li.id = 't-' + (idCount++);
       }
 
-      // Initial IDs
       tree.querySelectorAll('li').forEach(giveId);
 
       function updateChildren(chk, val) {
@@ -115,6 +132,7 @@
            .querySelectorAll('ul input[type=checkbox]')
            .forEach(c => { c.checked = val; c.indeterminate = false; });
       }
+
       function updateParents(chk) {
         const pLi = chk.closest('ul')?.closest('li');
         if (!pLi) return;
@@ -127,12 +145,14 @@
         else { pChk.checked = false; pChk.indeterminate = true; }
         updateParents(pChk);
       }
+
       function moveDone(li) {
         const pu = li.parentElement, ns = li.nextElementSibling;
         loc[li.id] = { pu, ns };
         li.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = true);
         done.appendChild(li);
       }
+
       function moveOrig(li) {
         const info = loc[li.id];
         if (!info) return tree.appendChild(li);
@@ -148,7 +168,6 @@
         tree.querySelectorAll('li').forEach(li => li.draggable = true);
         done.querySelectorAll('li').forEach(li => li.draggable = false);
 
-        // Checkboxes
         document.querySelectorAll('input[type=checkbox]').forEach(chk => {
           const n = chk.cloneNode();
           chk.replaceWith(n);
@@ -160,7 +179,6 @@
           });
         });
 
-        // Add/remove
         tree.querySelectorAll('.add-btn').forEach(b => {
           const nb = b.cloneNode(true); b.replaceWith(nb);
           nb.addEventListener('click', e => {
@@ -181,6 +199,7 @@
             reinit();
           });
         });
+
         tree.querySelectorAll('.remove-btn').forEach(b => {
           const nb = b.cloneNode(true); b.replaceWith(nb);
           nb.addEventListener('click', e => {
@@ -195,7 +214,6 @@
         });
       }
 
-      // Root-level add
       addRootBtn.addEventListener('click', () => {
         const name = prompt('Enter new top-level task:', '').trim();
         if (!name) return;
@@ -212,26 +230,20 @@
 
       reinit();
 
-      // Shared move logic
       function doMove(over, x, y) {
         const dropOnLabel = !!document.elementFromPoint(x, y)?.closest('li>label');
         const rect = over.getBoundingClientRect();
         const mid = rect.top + rect.height / 2;
-
-        // remove any root highlight
         tree.classList.remove('root-drag-over');
 
         if (over === tree) {
-          // dropped on empty root
           tree.appendChild(dragItem);
         }
         else if (dragSrc === done) {
-          // reorder in done
           if (y < mid) done.insertBefore(dragItem, over);
           else done.insertBefore(dragItem, over.nextSibling);
         }
         else {
-          // reorder/nest in tree
           if (dropOnLabel) {
             let u = over.querySelector('ul');
             if (!u) { u = document.createElement('ul'); over.appendChild(u); }
@@ -243,7 +255,6 @@
         reinit();
       }
 
-      // Mouse drag/drop
       [tree, done].forEach(list => {
         list.addEventListener('dragstart', e => {
           dragItem = e.target.closest('li');
@@ -251,7 +262,7 @@
           dragSrc = dragItem.closest('ul');
           dragItem.classList.add('dragging');
         });
-        list.addEventListener('dragend', e => {
+        list.addEventListener('dragend', () => {
           if (dragItem) {
             dragItem.classList.remove('dragging');
             dragItem = null;
@@ -266,7 +277,6 @@
             overLi.classList.add('drag-over');
           }
           else if (!overLi && list === tree) {
-            // hovering over empty root
             tree.classList.add('root-drag-over');
           }
         });
@@ -283,15 +293,18 @@
             doMove(overLi, e.clientX, e.clientY);
           }
           else if (!overLi && list === tree) {
-            // drop at root
             doMove(tree, e.clientX, e.clientY);
           }
         });
       });
 
-      // Touch drag/drop on tree only
+      // ✅ Updated: touchstart ignores checkbox/button taps
       tree.addEventListener('touchstart', e => {
-        const li = e.target.closest('li');
+        const target = e.target;
+        if (target.closest('input[type="checkbox"]') || target.closest('button')) {
+          return;
+        }
+        const li = target.closest('li');
         if (!li) return;
         dragItem = li;
         dragSrc = li.closest('ul');
@@ -328,7 +341,6 @@
         document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
         tree.classList.remove('root-drag-over');
       });
-
     });
   </script>
 </body>
